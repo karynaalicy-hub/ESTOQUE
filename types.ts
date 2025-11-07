@@ -5,6 +5,8 @@ export interface Product {
   unit: string;
   minStock: number;
   price: number;
+  consumptionUnit?: string;
+  consumptionRate?: number;
 }
 
 export interface StockEntry {
@@ -22,4 +24,13 @@ export interface StockExit {
   quantity: number;
 }
 
-export type Tab = 'products' | 'entries' | 'exits' | 'stock-control' | 'reports';
+export interface UserProfile {
+  id: string;
+  email: string;
+  isAdmin: boolean;
+}
+
+export type Tab = 'products' | 'entries' | 'exits' | 'stock-control' | 'reports' | 'consumption';
+
+export type EditableEntry = Partial<Omit<StockEntry, 'id'>>;
+export type EditableExit = Partial<Omit<StockExit, 'id'>>;

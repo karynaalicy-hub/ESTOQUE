@@ -1,17 +1,22 @@
 import React, { useState } from 'react';
-import { Product, StockExit } from '../types';
-import { MinusCircle } from 'lucide-react';
+import { Product, StockExit, EditableExit } from '../types';
+import { MinusCircle, Pencil, Save, XCircle, Trash2 } from 'lucide-react';
 
 interface ExitsProps {
   products: Product[];
   exits: StockExit[];
   addExit: (exit: Omit<StockExit, 'id'>) => void;
+  updateExit: (id: string, data: EditableExit) => void;
+  deleteExit: (id: string) => void;
 }
 
-const Exits: React.FC<ExitsProps> = ({ products, exits, addExit }) => {
+const Exits: React.FC<ExitsProps> = ({ products, exits, addExit, updateExit, deleteExit }) => {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [productId, setProductId] = useState('');
   const [quantity, setQuantity] = useState(1);
+  
+  const [editingExitId, setEditingExitId] = useState<string | null>(null);
+  const [editedExit, setEditedExit] = useState<EditableExit>({});
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,6 +28,40 @@ const Exits: React.FC<ExitsProps> = ({ products, exits, addExit }) => {
   };
 
   const getProductName = (id: string) => products.find(p => p.id === id)?.name || 'Produto Desconhecido';
+  
+  const handleEditClick = (exit: StockExit) => {
+    setEditingExitId(exit.id);
+    setEditedExit({
+        date: exit.date,
+        productId: exit.productId,
+        quantity: exit.quantity,
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingExitId(null);
+    setEditedExit({});
+  };
+
+  const handleSaveEdit = (id: string) => {
+    if (editedExit.date && editedExit.productId && editedExit.quantity && editedExit.quantity > 0) {
+        updateExit(id, editedExit);
+        handleCancelEdit();
+    } else {
+        alert("Todos os campos devem ser preenchidos e a quantidade deve ser maior que zero.");
+    }
+  };
+
+  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setEditedExit(prev => ({
+        ...prev,
+        [name]: name === 'quantity' ? Number(value) : value,
+    }));
+  };
+  
+  const formInputClass = "mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100";
+  const tableInputClass = "w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 p-1";
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -38,7 +77,7 @@ const Exits: React.FC<ExitsProps> = ({ products, exits, addExit }) => {
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 required
-                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                className={formInputClass}
               />
             </div>
             <div>
@@ -48,7 +87,7 @@ const Exits: React.FC<ExitsProps> = ({ products, exits, addExit }) => {
                 value={productId}
                 onChange={(e) => setProductId(e.target.value)}
                 required
-                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                className={formInputClass}
               >
                 <option value="">Selecione um produto</option>
                 {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -63,7 +102,7 @@ const Exits: React.FC<ExitsProps> = ({ products, exits, addExit }) => {
                 onChange={(e) => setQuantity(Number(e.target.value))}
                 required
                 min="1"
-                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                className={formInputClass}
               />
             </div>
             <button
@@ -87,18 +126,43 @@ const Exits: React.FC<ExitsProps> = ({ products, exits, addExit }) => {
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Data</th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Produto</th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Quantidade</th>
+                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                   {exits.length > 0 ? exits.map(exit => (
-                    <tr key={exit.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{new Date(exit.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{getProductName(exit.productId)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 dark:text-red-400 font-semibold">-{exit.quantity}</td>
-                    </tr>
+                    editingExitId === exit.id ? (
+                      <tr key={exit.id}>
+                        <td className="px-2 py-2 whitespace-nowrap"><input type="date" name="date" value={editedExit.date} onChange={handleEditInputChange} className={tableInputClass} /></td>
+                        <td className="px-2 py-2 whitespace-nowrap">
+                            <select name="productId" value={editedExit.productId} onChange={handleEditInputChange} className={tableInputClass}>
+                                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select>
+                        </td>
+                        <td className="px-2 py-2 whitespace-nowrap"><input type="number" name="quantity" value={editedExit.quantity} onChange={handleEditInputChange} min="1" className={`${tableInputClass} w-20`} /></td>
+                        <td className="px-6 py-2 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="flex items-center justify-end space-x-2">
+                              <button onClick={() => handleSaveEdit(exit.id)} className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300" aria-label="Salvar"><Save className="h-5 w-5"/></button>
+                              <button onClick={handleCancelEdit} className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300" aria-label="Cancelar"><XCircle className="h-5 w-5"/></button>
+                            </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      <tr key={exit.id}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{new Date(exit.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{getProductName(exit.productId)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 dark:text-red-400 font-semibold">-{exit.quantity}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="flex items-center justify-end space-x-2">
+                                <button onClick={() => handleEditClick(exit)} className="text-brand-600 hover:text-brand-900 dark:text-brand-400 dark:hover:text-brand-300" aria-label="Editar"><Pencil className="h-5 w-5"/></button>
+                                <button onClick={() => deleteExit(exit.id)} className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300" aria-label="Excluir"><Trash2 className="h-5 w-5"/></button>
+                            </div>
+                        </td>
+                      </tr>
+                    )
                   )): (
                      <tr>
-                      <td colSpan={3} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">Nenhuma saída registrada.</td>
+                      <td colSpan={4} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">Nenhuma saída registrada.</td>
                     </tr>
                   )}
                 </tbody>

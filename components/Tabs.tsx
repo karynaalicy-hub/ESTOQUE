@@ -10,7 +10,6 @@ interface TabOption {
 interface TabsProps {
   activeTab: Tab;
   setActiveTab: (tab: Tab) => void;
-  // FIX: Changed `tabs` prop to accept a readonly array to match the type of `tabOptions` in `App.tsx` which uses `as const`.
   tabs: readonly TabOption[];
 }
 

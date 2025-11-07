@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { Product, StockEntry } from '../types';
-import { PlusCircle, UploadCloud, FileScan, Loader2, X } from 'lucide-react';
+import { Product, StockEntry, EditableEntry } from '../types';
+import { PlusCircle, UploadCloud, FileScan, Loader2, X, Pencil, Save, XCircle, Trash2 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
 
 interface EntriesProps {
   products: Product[];
   entries: StockEntry[];
   addEntry: (entry: Omit<StockEntry, 'id'>) => void;
+  addMultipleEntries: (entries: Omit<StockEntry, 'id'>[]) => void;
+  updateEntry: (id: string, data: EditableEntry) => void;
+  deleteEntry: (id: string) => void;
 }
 
 type ExtractedEntry = {
@@ -16,27 +19,27 @@ type ExtractedEntry = {
   quantity: number;
 }
 
-// FIX: Define an interface for the expected JSON response from the Gemini API.
 interface InvoiceEntriesResponse {
   supplier: string;
   date: string;
   items: { name: string; quantity: number }[];
 }
 
-const Entries: React.FC<EntriesProps> = ({ products, entries, addEntry }) => {
-  // State for manual entry form
+const Entries: React.FC<EntriesProps> = ({ products, entries, addEntry, addMultipleEntries, updateEntry, deleteEntry }) => {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [productId, setProductId] = useState('');
   const [supplier, setSupplier] = useState('');
   const [quantity, setQuantity] = useState(1);
 
-  // State for invoice processing feature
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingError, setProcessingError] = useState<string | null>(null);
   const [extractedEntries, setExtractedEntries] = useState<ExtractedEntry[]>([]);
   const [extractedSupplier, setExtractedSupplier] = useState('');
   const [extractedDate, setExtractedDate] = useState('');
+  
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [editedEntry, setEditedEntry] = useState<EditableEntry>({});
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,6 +49,38 @@ const Entries: React.FC<EntriesProps> = ({ products, entries, addEntry }) => {
       setSupplier('');
       setQuantity(1);
     }
+  };
+  
+  const handleEditClick = (entry: StockEntry) => {
+    setEditingEntryId(entry.id);
+    setEditedEntry({
+        date: entry.date,
+        productId: entry.productId,
+        supplier: entry.supplier,
+        quantity: entry.quantity,
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingEntryId(null);
+    setEditedEntry({});
+  };
+
+  const handleSaveEdit = (id: string) => {
+    if (editedEntry.date && editedEntry.productId && editedEntry.supplier && editedEntry.quantity && editedEntry.quantity > 0) {
+        updateEntry(id, editedEntry);
+        handleCancelEdit();
+    } else {
+        alert("Todos os campos devem ser preenchidos e a quantidade deve ser maior que zero.");
+    }
+  };
+
+  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setEditedEntry(prev => ({
+        ...prev,
+        [name]: name === 'quantity' ? Number(value) : value,
+    }));
   };
 
   const getProductName = (id: string) => products.find(p => p.id === id)?.name || 'Produto Desconhecido';
@@ -82,7 +117,6 @@ const Entries: React.FC<EntriesProps> = ({ products, entries, addEntry }) => {
         const productLowerCaseName = product.name.toLowerCase().trim();
         let score = 0;
 
-        // More robust matching
         if (productLowerCaseName === lowerCaseName) {
             score = 1;
         } else if (productLowerCaseName.includes(lowerCaseName)) {
@@ -140,7 +174,6 @@ const Entries: React.FC<EntriesProps> = ({ products, entries, addEntry }) => {
         },
       });
 
-      // FIX: Type the parsed JSON to prevent errors when accessing its properties.
       const data: InvoiceEntriesResponse = JSON.parse(response.text);
 
       setExtractedSupplier(data.supplier || '');
@@ -179,27 +212,24 @@ const Entries: React.FC<EntriesProps> = ({ products, entries, addEntry }) => {
     setIsProcessing(false);
   };
   
-  const handleConfirmEntries = () => {
-    let entriesAdded = 0;
-    extractedEntries.forEach(entry => {
-      if (entry.productId && entry.quantity > 0) {
-        addEntry({
+  const handleConfirmEntries = async () => {
+    const entriesToAdd = extractedEntries
+      .filter(entry => entry.productId && entry.quantity > 0)
+      .map(entry => ({
           date: extractedDate,
           productId: entry.productId,
           supplier: extractedSupplier,
           quantity: Number(entry.quantity),
-        });
-        entriesAdded++;
-      }
-    });
+        }));
     
-    if (entriesAdded > 0) {
-      handleCancelExtraction();
+    if (entriesToAdd.length > 0) {
+      await addMultipleEntries(entriesToAdd);
     }
+    handleCancelExtraction();
   };
 
   const formInputClass = "mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100";
-
+  const tableInputClass = "w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 p-1";
 
   return (
     <div className="space-y-8">
@@ -333,19 +363,45 @@ const Entries: React.FC<EntriesProps> = ({ products, entries, addEntry }) => {
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Produto</th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fornecedor</th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Quantidade</th>
+                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                   {entries.length > 0 ? entries.map(entry => (
-                    <tr key={entry.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{new Date(entry.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{getProductName(entry.productId)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{entry.supplier}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 dark:text-green-400 font-semibold">+{entry.quantity}</td>
-                    </tr>
+                    editingEntryId === entry.id ? (
+                      <tr key={entry.id}>
+                        <td className="px-2 py-2 whitespace-nowrap"><input type="date" name="date" value={editedEntry.date} onChange={handleEditInputChange} className={tableInputClass} /></td>
+                        <td className="px-2 py-2 whitespace-nowrap">
+                            <select name="productId" value={editedEntry.productId} onChange={handleEditInputChange} className={tableInputClass}>
+                                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select>
+                        </td>
+                        <td className="px-2 py-2 whitespace-nowrap"><input type="text" name="supplier" value={editedEntry.supplier} onChange={handleEditInputChange} className={tableInputClass} /></td>
+                        <td className="px-2 py-2 whitespace-nowrap"><input type="number" name="quantity" value={editedEntry.quantity} onChange={handleEditInputChange} min="1" className={`${tableInputClass} w-20`} /></td>
+                        <td className="px-6 py-2 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="flex items-center justify-end space-x-2">
+                              <button onClick={() => handleSaveEdit(entry.id)} className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300" aria-label="Salvar"><Save className="h-5 w-5"/></button>
+                              <button onClick={handleCancelEdit} className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300" aria-label="Cancelar"><XCircle className="h-5 w-5"/></button>
+                            </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      <tr key={entry.id}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{new Date(entry.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{getProductName(entry.productId)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{entry.supplier}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 dark:text-green-400 font-semibold">+{entry.quantity}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="flex items-center justify-end space-x-2">
+                                <button onClick={() => handleEditClick(entry)} className="text-brand-600 hover:text-brand-900 dark:text-brand-400 dark:hover:text-brand-300" aria-label="Editar"><Pencil className="h-5 w-5"/></button>
+                                <button onClick={() => deleteEntry(entry.id)} className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300" aria-label="Excluir"><Trash2 className="h-5 w-5"/></button>
+                            </div>
+                        </td>
+                      </tr>
+                    )
                   )) : (
                     <tr>
-                      <td colSpan={4} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">Nenhuma entrada registrada.</td>
+                      <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">Nenhuma entrada registrada.</td>
                     </tr>
                   )}
                 </tbody>

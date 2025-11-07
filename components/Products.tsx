@@ -6,6 +6,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 interface ProductsProps {
   products: Product[];
   addProduct: (product: Omit<Product, 'id'>) => void;
+  addMultipleProducts: (products: Omit<Product, 'id'>[]) => void;
   deleteProduct: (id: string) => void;
   updateProduct: (id: string, data: Partial<Omit<Product, 'id'>>) => void;
 }
@@ -23,7 +24,7 @@ interface InvoiceItemsResponse {
   items: { name: string }[];
 }
 
-const Products: React.FC<ProductsProps> = ({ products, addProduct, deleteProduct, updateProduct }) => {
+const Products: React.FC<ProductsProps> = ({ products, addProduct, addMultipleProducts, deleteProduct, updateProduct }) => {
   // State for manual entry form
   const [name, setName] = useState('');
   const [unit, setUnit] = useState('');
@@ -186,19 +187,18 @@ const Products: React.FC<ProductsProps> = ({ products, addProduct, deleteProduct
     setIsProcessing(false);
   };
   
-  const handleConfirmNewProducts = () => {
-    let productsAdded = 0;
-    extractedProducts.forEach(p => {
-      if (p.name && p.unit && p.minStock >= 0 && p.price >= 0) {
-        addProduct({ name: p.name, unit: p.unit, minStock: p.minStock, price: p.price });
-        productsAdded++;
-      }
-    });
-    
-    if (productsAdded > 0) {
+  const handleConfirmNewProducts = async () => {
+    const productsToAdd = extractedProducts
+      .filter(p => p.name && p.unit && p.minStock >= 0 && p.price >= 0)
+      .map(({ key, ...rest }) => rest);
+
+    if (productsToAdd.length > 0) {
+      await addMultipleProducts(productsToAdd);
       handleCancelExtraction();
     } else if (extractedProducts.length > 0) {
       alert("Por favor, preencha todos os campos para os produtos que deseja adicionar.");
+    } else {
+      handleCancelExtraction();
     }
   };
 
