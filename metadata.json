@@ -1,0 +1,5 @@
+{
+  "name": "Sistema de Controle de Estoque",
+  "description": "Um sistema completo de controle de estoque para gerenciar produtos, entradas, saídas e visualizar os níveis de estoque atuais. Inspirado em um layout de planilha, este aplicativo oferece uma interface amigável para gerenciamento de inventário.",
+  "requestFramePermissions": []
+}
