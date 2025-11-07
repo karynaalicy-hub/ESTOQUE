@@ -20,6 +20,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const loadData = async () => {
+      setIsLoading(true);
       try {
         const [productsData, entriesData, exitsData] = await Promise.all([
           db.getAll<Product>('products'),
@@ -30,8 +31,8 @@ const App: React.FC = () => {
         setEntries(entriesData);
         setExits(exitsData);
       } catch (error) {
-        console.error("Falha ao carregar os dados do backend.", error);
-        alert("Não foi possível conectar ao servidor. Verifique sua conexão e a URL da API em db.ts.");
+        console.error("Falha ao carregar os dados do Firebase.", error);
+        alert("Não foi possível conectar ao Firebase. Verifique sua conexão e se as credenciais em 'firebaseConfig.ts' estão corretas.");
       } finally {
         setIsLoading(false);
       }
@@ -42,7 +43,7 @@ const App: React.FC = () => {
   const addProduct = async (product: Omit<Product, 'id'>) => {
     try {
       const newProduct = await db.add('products', product) as Product;
-      setProducts(prev => [...prev, newProduct]);
+      setProducts(prev => [...prev, newProduct].sort((a,b) => a.name.localeCompare(b.name)));
     } catch(error) {
       console.error("Erro ao adicionar produto:", error);
       alert("Não foi possível adicionar o produto. Verifique sua conexão ou tente mais tarde.");
@@ -88,14 +89,26 @@ const App: React.FC = () => {
   const deleteProduct = async (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir este produto? A exclusão é permanente e removerá todas as entradas e saídas associadas.')) {
         try {
-            await db.deleteItem('products', id);
+            // Encontra entradas e saídas relacionadas a partir do estado atual
+            const entriesToDelete = entries.filter(e => e.productId === id);
+            const exitsToDelete = exits.filter(e => e.productId === id);
+            
+            // Cria uma lista de promessas para todas as exclusões no banco de dados
+            const deletePromises = [
+                db.deleteItem('products', id),
+                ...entriesToDelete.map(e => db.deleteItem('entries', e.id)),
+                ...exitsToDelete.map(x => db.deleteItem('exits', x.id))
+            ];
 
-            // Optimistically update the UI
+            // Aguarda todas as exclusões serem concluídas
+            await Promise.all(deletePromises);
+
+            // Atualiza a interface do usuário após o sucesso das operações no banco de dados
             setProducts(prev => prev.filter(p => p.id !== id));
             setEntries(prev => prev.filter(e => e.productId !== id));
             setExits(prev => prev.filter(e => e.productId !== id));
         } catch (error) {
-            console.error("Erro ao excluir o produto:", error);
+            console.error("Erro ao excluir o produto e seus dados relacionados:", error);
             alert("Ocorreu um erro ao excluir o produto. Tente novamente.");
         }
     }
@@ -147,7 +160,7 @@ const App: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
         <div className="text-center">
           <Loader2 className="mx-auto h-12 w-12 text-brand-600 animate-spin" />
-          <h2 className="mt-4 text-xl font-semibold text-gray-900 dark:text-white">Conectando ao servidor...</h2>
+          <h2 className="mt-4 text-xl font-semibold text-gray-900 dark:text-white">Conectando ao banco de dados...</h2>
           <p className="mt-2 text-gray-600 dark:text-gray-400">Carregando dados do seu estoque na nuvem.</p>
         </div>
       </div>
